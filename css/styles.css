@@ -315,6 +315,7 @@ h2 {
   transition: opacity 0.25s ease, transform 0.25s ease;
   font-weight: 700;
   z-index: 20;
+  pointer-events: none;
 }
 
 #toast.visible {

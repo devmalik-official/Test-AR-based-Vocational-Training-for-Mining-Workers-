@@ -541,6 +541,20 @@ function buildExit(position) {
   return group;
 }
 
+function updateDrillVisibility() {
+  state.drillInteractiveObjects.forEach((object) => {
+    if (!object || !object.userData) return;
+    const type = object.userData.type;
+    object.visible = (
+      type === 'alarm' && state.drillState === 'ALARM_REQUIRED'
+    ) || (
+      type === 'extinguisher' && ['ALARM_ACTIVATED', 'EXTINGUISHER_REQUIRED'].includes(state.drillState)
+    ) || (
+      type === 'exit' && state.drillState === 'EVACUATION_REQUIRED'
+    );
+  });
+}
+
 function buildScenarioDrill(anchorPosition) {
   if (!state.scene) return;
   if (state.drillWorldGroup) {
@@ -597,16 +611,14 @@ function buildScenarioDrill(anchorPosition) {
   state.drillInteractiveObjects.push(alarm);
 
   const co2 = buildExtinguisher({ label: 'CO₂', color: 0xf87171, correct: true, position: new THREE.Vector3(-0.42, 0.12, -0.3) });
-  const water = buildExtinguisher({ label: 'WATER', color: 0x60a5fa, correct: false, position: new THREE.Vector3(-0.08, 0.12, -0.3) });
-  const foam = buildExtinguisher({ label: 'FOAM', color: 0x22c55e, correct: false, position: new THREE.Vector3(0.26, 0.12, -0.3) });
-  const bucket = buildBucket(new THREE.Vector3(0.58, 0.12, -0.22));
   const exit = buildExit(new THREE.Vector3(0.62, 0.38, 0.08));
-  [co2, water, foam, bucket, exit].forEach((item) => world.add(item));
-  state.drillInteractiveObjects.push(co2, water, foam, bucket, exit);
+  [co2, exit].forEach((item) => world.add(item));
+  state.drillInteractiveObjects.push(co2, exit);
 
   state.activeExtinguisher = co2;
   setObjective('Tap the red alarm, then choose the CO₂ extinguisher.');
   state.drillState = 'ALARM_REQUIRED';
+  updateDrillVisibility();
   showToast('AR drill started');
 }
 
@@ -678,8 +690,14 @@ function setupPlacementButton() {
     fontWeight: '700'
   });
   button.addEventListener('click', () => {
-    if (!state.placementReticle || !state.placementReticle.visible) return;
-    const anchorPos = state.placementReticle.position.clone();
+    const reticle = state.placementReticle;
+    if (state.arSession && (!reticle || !reticle.visible)) {
+      showToast('Point the camera at the floor before starting');
+      return;
+    }
+    const anchorPos = state.currentPlacement
+      ? state.currentPlacement.clone()
+      : reticle?.position.clone() || new THREE.Vector3(0, 0.01, -0.8);
     removeFirePreview();
     setScanHudVisible(false);
     state.isPlacementConfirmed = true;
@@ -792,6 +810,7 @@ async function initARScene() {
               state.assessmentEngine.recordEffectiveSprayTime(state.effectiveSprayDuration);
               state.assessmentEngine.recordExtinguishingSuccess(true);
               setObjective('Fire out. Tap the green EXIT marker to finish the drill.');
+              updateDrillVisibility();
               showToast('Fire extinguished');
             }
           }
@@ -840,6 +859,7 @@ async function initARScene() {
       state.isAlarmActive = true;
       state.drillState = 'ALARM_ACTIVATED';
       setObjective('Tap the CO₂ extinguisher. Avoid water and foam.');
+      updateDrillVisibility();
       showToast('Alarm activated');
       return;
     }
@@ -853,6 +873,7 @@ async function initARScene() {
         state.correctExtinguisherSelected = true;
         state.isCorrectExtinguisherSelected = true;
         state.drillState = 'EXTINGUISHER_REQUIRED';
+        updateDrillVisibility();
         state.assessmentEngine.recordExtinguisherChoice('co2');
         setObjective('Aim at the fire and hold SPRAY.');
         toggleSprayButton(true);

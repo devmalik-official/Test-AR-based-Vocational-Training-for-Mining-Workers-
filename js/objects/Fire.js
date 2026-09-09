@@ -1,3 +1,31 @@
+function createFlameTexture(innerColor, outerColor) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 320;
+  const context = canvas.getContext('2d');
+  const gradient = context.createRadialGradient(128, 188, 18, 128, 175, 138);
+  gradient.addColorStop(0, innerColor);
+  gradient.addColorStop(0.42, innerColor);
+  gradient.addColorStop(0.78, outerColor);
+  gradient.addColorStop(1, 'rgba(255, 60, 0, 0)');
+
+  context.clearRect(0, 0, canvas.width, canvas.height);
+  context.fillStyle = gradient;
+  context.beginPath();
+  context.moveTo(128, 306);
+  context.bezierCurveTo(42, 300, 34, 244, 72, 192);
+  context.bezierCurveTo(94, 162, 84, 120, 124, 34);
+  context.bezierCurveTo(132, 86, 173, 94, 158, 151);
+  context.bezierCurveTo(213, 113, 220, 194, 188, 224);
+  context.bezierCurveTo(169, 244, 185, 281, 128, 306);
+  context.closePath();
+  context.fill();
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.needsUpdate = true;
+  return texture;
+}
+
 class Fire {
   constructor({ scene, position = new THREE.Vector3(), config = {} }) {
     this.scene = scene;
@@ -22,30 +50,69 @@ class Fire {
   }
 
   create() {
-    const flameMaterial = new THREE.MeshStandardMaterial({
-      color: 0xffa726,
-      emissive: 0xff6a00,
-      emissiveIntensity: this.config.fireIntensity,
-      transparent: true,
-      opacity: 0.95
-    });
+    const size = this.config.fireSize / 0.18;
+    const flameTextures = [
+      createFlameTexture('rgba(255, 245, 190, 1)', 'rgba(255, 180, 0, 0.95)'),
+      createFlameTexture('rgba(255, 235, 80, 1)', 'rgba(255, 92, 0, 0.92)'),
+      createFlameTexture('rgba(255, 150, 20, 0.95)', 'rgba(198, 25, 0, 0.82)')
+    ];
+    const flameProfiles = [
+      [-0.72, 0.26, 0.42, 0.52], [-0.48, 0.24, 0.55, 0.67], [-0.23, 0.3, 0.48, 0.56],
+      [0.04, 0.27, 0.64, 0.78], [0.3, 0.31, 0.46, 0.55], [0.56, 0.25, 0.57, 0.68],
+      [0.8, 0.22, 0.38, 0.48]
+    ];
 
-    for (let i = 0; i < 3; i += 1) {
-      const flame = new THREE.Mesh(new THREE.SphereGeometry(0.05 + i * 0.02, 16, 16), flameMaterial.clone());
-      flame.scale.set(1, 1.6 + i * 0.35, 1);
-      flame.position.set((i - 1) * 0.05, i * 0.04, 0);
+    flameProfiles.forEach((profile, index) => {
+      const [x, width, height, y] = profile;
+      const flame = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: flameTextures[index % flameTextures.length],
+        transparent: true,
+        depthWrite: false,
+        depthTest: false,
+        blending: THREE.AdditiveBlending,
+        opacity: 0.96
+      }));
+      flame.scale.set(width * size, height * size, 1);
+      flame.position.set(x * size, y * size, (index % 2) * 0.025);
+      flame.rotation.z = (index % 3 - 1) * 0.12;
       flame.userData.baseScale = flame.scale.clone();
-      flame.userData.speed = 0.9 + i * 0.4;
+      flame.userData.basePosition = flame.position.clone();
+      flame.userData.baseRotation = flame.rotation.z;
+      flame.userData.speed = 1.3 + (index % 3) * 0.45;
+      flame.userData.phase = index * 0.8;
       this.group.add(flame);
       this.flameMeshes.push(flame);
-    }
+    });
+
+    const core = new THREE.Mesh(
+      new THREE.SphereGeometry(0.1, 16, 16),
+      new THREE.MeshBasicMaterial({ color: 0xfff4b0, transparent: true, opacity: 0.92 })
+    );
+    core.scale.set(size, size * 1.5, 0.7);
+    core.position.set(0, 0.08 * size, 0.06);
+    core.userData.baseScale = core.scale.clone();
+    core.userData.basePosition = core.position.clone();
+    core.userData.baseRotation = core.rotation;
+    core.userData.speed = 1.8;
+    core.userData.phase = 0.8;
+    this.group.add(core);
+    this.flameMeshes.push(core);
 
     const base = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.08, 0.12, 0.04, 18),
-      new THREE.MeshStandardMaterial({ color: 0x3c2f2f, emissive: 0x130f0d, roughness: 0.8, metalness: 0.1 })
+      new THREE.CylinderGeometry(0.12, 0.18, 0.05, 24),
+      new THREE.MeshStandardMaterial({ color: 0x17100d, emissive: 0x4a1608, emissiveIntensity: 0.8, roughness: 0.9, metalness: 0.1 })
     );
+    base.scale.set(3.2 * size, 1, 0.9 * size);
     base.position.y = -0.02;
     this.group.add(base);
+
+    const emberGlow = new THREE.Mesh(
+      new THREE.PlaneGeometry(1.2 * size, 0.2 * size),
+      new THREE.MeshBasicMaterial({ color: 0xff5a0a, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false })
+    );
+    emberGlow.rotation.x = -Math.PI / 2;
+    emberGlow.position.y = -0.005;
+    this.group.add(emberGlow);
 
     this.light = new THREE.PointLight(0xff8a1a, this.config.fireIntensity, 3.5, 2);
     this.light.position.set(0, 0.2, 0);
@@ -95,10 +162,12 @@ class Fire {
         flame.userData.baseScale.y * scaleFactor,
         flame.userData.baseScale.z * scaleFactor
       );
-      flame.position.y = index * 0.04 + Math.sin(time * (4 + index) * this.config.animationSpeed) * 0.03;
-      const material = flame.material;
-      material.emissiveIntensity = this.config.fireIntensity * this.health * (0.75 + pulse * 0.6);
-      material.opacity = 0.8 * this.health;
+      const basePosition = flame.userData.basePosition;
+      flame.position.copy(basePosition);
+      flame.position.y += Math.sin(time * (4 + index) * this.config.animationSpeed + flame.userData.phase) * 0.018;
+      flame.position.x += Math.sin(time * flame.userData.speed + flame.userData.phase) * 0.018;
+      flame.rotation.z = flame.userData.baseRotation + Math.sin(time * flame.userData.speed) * 0.08;
+      flame.material.opacity = (index === this.flameMeshes.length - 1 ? 0.92 : 0.8) * this.health;
     });
 
     this.light.intensity = this.config.fireIntensity * this.health * (0.8 + pulse * 0.7);
