@@ -55,6 +55,7 @@ const state = {
   arenaAnchor: null,
   cameraFallbackMode: false,
   previewFire: null,
+  fireDetectionTimeout: null,
   certificateGenerator: new window.CertificateGenerator(),
   storageManager: new window.LocalStorageManager(),
   assessmentEngine: new window.AssessmentEngine({
@@ -548,7 +549,7 @@ function updateDrillVisibility() {
     object.visible = (
       type === 'alarm' && state.drillState === 'ALARM_REQUIRED'
     ) || (
-      type === 'extinguisher' && ['ALARM_ACTIVATED', 'EXTINGUISHER_REQUIRED'].includes(state.drillState)
+      type === 'extinguisher' && state.drillState === 'ALARM_ACTIVATED'
     ) || (
       type === 'exit' && state.drillState === 'EVACUATION_REQUIRED'
     );
@@ -625,6 +626,7 @@ function buildScenarioDrill(anchorPosition) {
 function showFirePreview() {
   if (!state.scene || state.previewFire) return;
 
+  if (state.placementButton) state.placementButton.style.display = 'block';
   setScanHudVisible(true);
   const previewPosition = new THREE.Vector3(
     (Math.random() - 0.5) * 0.9,
@@ -639,6 +641,17 @@ function showFirePreview() {
   state.previewFire.group.position.copy(previewPosition);
   setObjective('Scan the area around you to find a safe training position.');
   showToast('Virtual fire detected nearby');
+}
+
+function scheduleFireDetection() {
+  if (state.fireDetectionTimeout) window.clearTimeout(state.fireDetectionTimeout);
+  if (state.placementButton) state.placementButton.style.display = 'none';
+  setScanHudVisible(true);
+  setObjective('Detecting fire in the area...');
+  state.fireDetectionTimeout = window.setTimeout(() => {
+    state.fireDetectionTimeout = null;
+    showFirePreview();
+  }, 15000);
 }
 
 function removeFirePreview() {
@@ -933,7 +946,7 @@ async function initARScene() {
     state.currentPlacement = state.placementReticle.position.clone();
   }
 
-  showFirePreview();
+  scheduleFireDetection();
 
   if (navigator.xr && typeof navigator.xr.isSessionSupported === 'function') {
     try {
@@ -1068,6 +1081,10 @@ function downloadCertificate() {
 }
 
 function resetScenario() {
+  if (state.fireDetectionTimeout) {
+    window.clearTimeout(state.fireDetectionTimeout);
+    state.fireDetectionTimeout = null;
+  }
   if (state.placementButton) {
     state.placementButton.remove();
     state.placementButton = null;

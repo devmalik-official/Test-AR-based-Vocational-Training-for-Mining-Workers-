@@ -1,4 +1,4 @@
-const CACHE_NAME = 'sih-fire-safety-v14';
+const CACHE_NAME = 'sih-fire-safety-v16';
 const APP_SHELL = [
   './',
   './index.html',
