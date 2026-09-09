@@ -276,9 +276,8 @@ function handleAction(action) {
 }
 
 async function requestCameraPermission() {
-  const isSecureContext = window.isSecureContext || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-  if (!isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    return { allowed: false, reason: 'AR mode is not supported on this browser/device. Please use a compatible Android browser/device.' };
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    return { allowed: false, reason: 'Camera API is unavailable on this browser, but AR will still be attempted on supported devices.' };
   }
 
   try {
@@ -299,32 +298,27 @@ async function requestCameraPermission() {
 }
 
 async function startARExperience() {
-  const cameraPermission = await requestCameraPermission();
-  if (!cameraPermission.allowed) {
-    showCompatibilityScreen(cameraPermission.reason);
-    return;
-  }
-
   const xr = navigator.xr;
-  if (!xr || !('isSessionSupported' in xr)) {
+  if (!xr || typeof xr.requestSession !== 'function') {
     showCompatibilityScreen('AR mode is not supported on this browser/device. Please use a compatible Android browser/device with WebXR AR support.');
     return;
   }
 
-  xr.isSessionSupported('immersive-ar').then((supported) => {
-    state.arSupported = supported;
-    if (!supported) {
+  try {
+    const supported = await xr.isSessionSupported?.('immersive-ar');
+    if (supported === false) {
       showCompatibilityScreen('AR mode is not supported on this browser/device. Please use a compatible Android browser/device with WebXR AR support.');
       return;
     }
+
     setScreen('ar-scan');
-    initARScene();
-  }).catch(() => {
+    await initARScene();
+  } catch (error) {
     showCompatibilityScreen('AR mode is not supported on this browser/device. Please use a compatible Android browser/device with WebXR AR support.');
-  });
+  }
 }
 
-function initARScene() {
+async function initARScene() {
   const canvas = document.getElementById('arCanvas');
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -385,39 +379,43 @@ function initARScene() {
 
   document.body.appendChild(button);
 
-  if (navigator.xr) {
-    navigator.xr.requestSession('immersive-ar', {
-      requiredFeatures: ['hit-test'],
-      optionalFeatures: ['dom-overlay'],
-      domOverlay: { root: document.body }
-    }).then((session) => {
+  if (navigator.xr && typeof navigator.xr.requestSession === 'function') {
+    try {
+      const session = await navigator.xr.requestSession('immersive-ar', {
+        requiredFeatures: ['hit-test'],
+        optionalFeatures: ['dom-overlay'],
+        domOverlay: { root: document.body }
+      });
+
       state.xrSession = session;
       state.arReady = true;
       renderer.xr.setReferenceSpaceType('local');
       session.updateRenderState({ baseLayer: new XRWebGLLayer(session, renderer.getContext()) });
-      session.requestReferenceSpace('viewer').then((referenceSpace) => {
-        session.requestReferenceSpace('local').then((localSpace) => {
-          const hitTestSource = session.requestHitTestSource({ space: referenceSpace });
-          state.hitTestSource = hitTestSource;
-          session.addEventListener('end', () => {
-            state.arReady = false;
-          });
-          session.addEventListener('select', () => {
-            if (!state.isPlacementConfirmed && state.placementManager && state.placementManager.currentSurface) {
-              const placement = state.placementManager.currentSurface;
-              const position = new THREE.Vector3(placement.position.x, placement.position.y, placement.position.z);
-              createScenarioAtPosition(position);
-              setScreen('fire-detected');
-              startScenarioCountdown();
-            }
-          });
-          renderer.xr.setSession(session, referenceSpace);
-          session.addEventListener('inputsourceschange', () => {});
-        });
+      const referenceSpace = await session.requestReferenceSpace('viewer');
+      await session.requestReferenceSpace('local');
+      const hitTestSource = await session.requestHitTestSource({ space: referenceSpace });
+      state.hitTestSource = hitTestSource;
+
+      session.addEventListener('end', () => {
+        state.arReady = false;
       });
-    }).catch(() => {
-      setScreen('compatibility');
-    });
+      session.addEventListener('select', () => {
+        if (!state.isPlacementConfirmed && state.placementManager && state.placementManager.currentSurface) {
+          const placement = state.placementManager.currentSurface;
+          const position = new THREE.Vector3(placement.position.x, placement.position.y, placement.position.z);
+          createScenarioAtPosition(position);
+          setScreen('fire-detected');
+          startScenarioCountdown();
+        }
+      });
+
+      renderer.xr.setSession(session, referenceSpace);
+      session.addEventListener('inputsourceschange', () => {});
+    } catch (error) {
+      showCompatibilityScreen('AR mode is not supported on this browser/device. Please use a compatible Android browser/device with WebXR AR support.');
+    }
+  } else {
+    showCompatibilityScreen('AR mode is not supported on this browser/device. Please use a compatible Android browser/device with WebXR AR support.');
   }
 
   function animatePlacementFrame() {
