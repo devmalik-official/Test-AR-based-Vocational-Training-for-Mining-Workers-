@@ -1,0 +1,14 @@
+{
+  "name": "sih-fire-ar-safety-trainer",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Offline-first WebAR vocational safety training prototype for industrial fire response.",
+  "scripts": {
+    "start": "python -m http.server 8080",
+    "serve": "python -m http.server 8080"
+  },
+  "dependencies": {
+    "three": "^0.166.1"
+  }
+}

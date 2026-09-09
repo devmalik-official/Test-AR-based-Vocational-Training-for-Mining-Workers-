@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#0d1117" />
+    <meta name="description" content="AR-based vocational training simulator for industrial safety" />
+    <link rel="manifest" href="./manifest.json" />
+    <link rel="stylesheet" href="./css/styles.css" />
+    <title>Industrial Fire Safety Trainer</title>
+  </head>
+  <body>
+    <div id="app">
+      <div id="splash" class="screen active">
+        <div class="card splash-card">
+          <div class="logo">🚧</div>
+          <h1>Industrial Safety Training</h1>
+          <p>Module 1 · Fire & Explosion Response</p>
+          <button class="primary-btn" data-action="go-to-language">Start</button>
+        </div>
+      </div>
+
+      <div id="language" class="screen">
+        <div class="panel">
+          <p class="eyebrow">Language</p>
+          <h2>Select your language</h2>
+          <div class="language-list">
+            <button class="lang-btn active" data-lang="en">English</button>
+            <button class="lang-btn" data-lang="hi">हिंदी</button>
+            <button class="lang-btn" data-lang="sat">Santali</button>
+          </div>
+          <button class="primary-btn" data-action="go-to-home">Continue</button>
+        </div>
+      </div>
+
+      <div id="home" class="screen">
+        <div class="panel">
+          <p class="eyebrow">Home</p>
+          <h2>Safety Training</h2>
+          <div class="module-card">
+            <div class="badge">MODULE 01</div>
+            <h3>Fire & Explosion Response</h3>
+            <p>Electrical equipment fire · hazard identification · extinguisher safety · evacuation.</p>
+          </div>
+          <button class="primary-btn" data-action="go-to-module-intro">Begin Module</button>
+        </div>
+      </div>
+
+      <div id="module-intro" class="screen">
+        <div class="panel">
+          <p class="eyebrow">Introduction</p>
+          <h2>Industrial Fire Response</h2>
+          <ul class="bullet-list">
+            <li>Identify the source of the ignition.</li>
+            <li>Select a safe extinguisher.</li>
+            <li>Operate it correctly and evacuate safely.</li>
+          </ul>
+          <button class="primary-btn" data-action="go-to-safety">Next</button>
+        </div>
+      </div>
+
+      <div id="safety-instructions" class="screen">
+        <div class="panel">
+          <p class="eyebrow">Safety Instructions</p>
+          <h2>Before entering AR</h2>
+          <ul class="bullet-list">
+            <li>Allow camera access for live environment scanning.</li>
+            <li>Choose a stable floor or flat industrial surface.</li>
+            <li>Keep the training area clear of bystanders.</li>
+          </ul>
+          <button class="primary-btn" data-action="start-ar-scan">Start Scan</button>
+        </div>
+      </div>
+
+      <div id="ar-scan" class="screen fullscreen-screen">
+        <div id="ar-canvas-wrap">
+          <canvas id="arCanvas"></canvas>
+          <div id="ar-ui" class="ar-ui">
+            <div class="top-bar">
+              <span class="status-badge">FIRE DETECTED</span>
+              <span id="scanTimer" class="timer" aria-live="polite">00:60</span>
+            </div>
+            <div id="ar-hud" class="ar-hud">Scan a stable surface to place the training area.</div>
+            <div class="bottom-panel">
+              <strong id="arTaskLabel">AR scan</strong>
+              <span id="arTaskText">Move slowly and locate a safe surface.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="fire-detected" class="screen">
+        <div class="panel">
+          <p class="eyebrow">Scenario Active</p>
+          <h2>FIRE DETECTED</h2>
+          <p>Identify the hazard and respond safely.</p>
+          <div class="countdown-box">
+            <span>Time Remaining</span>
+            <strong id="scenarioTimer">00:60</strong>
+          </div>
+          <button class="primary-btn" data-action="go-to-hazard-id">Identify Hazards</button>
+        </div>
+      </div>
+
+      <div id="hazard-identification" class="screen">
+        <div class="panel wide-panel">
+          <p class="eyebrow">Hazard identification</p>
+          <h2>Identify the hazards.</h2>
+          <div id="hazardGrid" class="hazard-grid"></div>
+          <button class="primary-btn" data-action="go-to-extinguisher-selection">Continue</button>
+        </div>
+      </div>
+
+      <div id="extinguisher-selection" class="screen">
+        <div class="panel">
+          <p class="eyebrow">Extinguisher</p>
+          <h2>Select the correct extinguisher</h2>
+          <div class="choice-list">
+            <button class="choice-btn" data-extinguisher="water">Water</button>
+            <button class="choice-btn correct" data-extinguisher="co2">CO₂</button>
+            <button class="choice-btn" data-extinguisher="powder">Dry Chemical Powder</button>
+          </div>
+          <div id="extinguisherFeedback" class="feedback-box"></div>
+        </div>
+      </div>
+
+      <div id="extinguisher-interaction" class="screen fullscreen-screen">
+        <div id="interaction-canvas-wrap">
+          <canvas id="interactionCanvas"></canvas>
+          <div id="interaction-ui" class="ar-ui">
+            <div class="top-bar">
+              <span class="status-badge warning">EXTINGUISHING</span>
+              <span id="extinguisherProgressLabel" class="timer">0%</span>
+            </div>
+            <div class="bottom-panel">
+              <strong>Task</strong>
+              <span>Aim the CO₂ nozzle at the fire and hold the trigger.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="fire-extinguished" class="screen">
+        <div class="panel">
+          <p class="eyebrow">Outcome</p>
+          <h2>FIRE EXTINGUISHED ✓</h2>
+          <p>Electrical equipment is secured. Begin evacuation planning.</p>
+          <button class="primary-btn" data-action="go-to-evacuation">Evacuate</button>
+        </div>
+      </div>
+
+      <div id="evacuation" class="screen">
+        <div class="panel wide-panel">
+          <p class="eyebrow">Evacuation</p>
+          <h2>Choose the safest route</h2>
+          <div id="routeGrid" class="hazard-grid"></div>
+          <button class="primary-btn" data-action="go-to-assessment">Finish</button>
+        </div>
+      </div>
+
+      <div id="assessment-result" class="screen">
+        <div class="panel">
+          <p class="eyebrow">Assessment</p>
+          <h2 id="assessmentTitle">Training Complete</h2>
+          <div id="scoreSummary" class="score-box"></div>
+          <button class="primary-btn" data-action="show-remediation-or-certificate">View Result</button>
+        </div>
+      </div>
+
+      <div id="remediation" class="screen">
+        <div class="panel">
+          <p class="eyebrow">Training Not Passed</p>
+          <h2>Remediation</h2>
+          <div id="remediationContent" class="remediation-box"></div>
+          <button class="primary-btn" data-action="retry-training">Retry Training</button>
+        </div>
+      </div>
+
+      <div id="certificate" class="screen">
+        <div class="panel">
+          <p class="eyebrow">Certificate</p>
+          <h2>Offline Certificate</h2>
+          <canvas id="certificateCanvas" width="900" height="560"></canvas>
+          <button class="primary-btn" data-action="download-certificate">Download</button>
+        </div>
+      </div>
+
+      <div id="compatibility" class="screen">
+        <div class="panel">
+          <p class="eyebrow">Compatibility</p>
+          <h2>AR mode is not supported on this browser/device.</h2>
+          <p>Please use a compatible Android browser/device with WebXR AR support.</p>
+          <button class="primary-btn" data-action="go-to-home">Return Home</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="toast" aria-live="polite"></div>
+    <script type="module">
+      import * as THREE from './node_modules/three/build/three.module.js';
+      window.THREE = THREE;
+    </script>
+    <script src="./data/scenarios.js"></script>
+    <script src="./js/localization/translations.js"></script>
+    <script src="./js/storage/LocalStorageManager.js"></script>
+    <script src="./js/assessment/AssessmentEngine.js"></script>
+    <script src="./js/certificate/CertificateGenerator.js"></script>
+    <script src="./js/ar/ARManager.js"></script>
+    <script src="./js/ar/SurfaceDetector.js"></script>
+    <script src="./js/ar/PlacementManager.js"></script>
+    <script src="./js/objects/Fire.js"></script>
+    <script src="./js/objects/Extinguisher.js"></script>
+    <script src="./js/objects/SprayEffect.js"></script>
+    <script src="./js/scenarios/FireScenario.js"></script>
+    <script src="./js/app.js"></script>
+  </body>
+</html>
