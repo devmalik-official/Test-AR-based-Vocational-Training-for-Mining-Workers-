@@ -54,6 +54,7 @@ const state = {
   retryButton: null,
   arenaAnchor: null,
   cameraFallbackMode: false,
+  previewFire: null,
   certificateGenerator: new window.CertificateGenerator(),
   storageManager: new window.LocalStorageManager(),
   assessmentEngine: new window.AssessmentEngine({
@@ -306,6 +307,14 @@ function setObjective(text) {
   if (textNode) textNode.textContent = text;
 }
 
+function setScanHudVisible(visible) {
+  const hud = document.getElementById('ar-hud');
+  if (hud) {
+    hud.classList.toggle('hidden', !visible);
+    hud.style.display = visible ? '' : 'none';
+  }
+}
+
 function toggleSprayButton(show) {
   let button = document.querySelector('.spray-button');
   if (!button) {
@@ -364,6 +373,76 @@ function buildTextLabel(text, color = '#ffffff') {
   return sprite;
 }
 
+function buildObjectBadge(type, label, color) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 320;
+  canvas.height = 320;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = 'rgba(7, 12, 20, 0.94)';
+  ctx.beginPath();
+  ctx.roundRect(10, 10, 300, 300, 42);
+  ctx.fill();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 10;
+  ctx.stroke();
+
+  ctx.fillStyle = color;
+  if (type === 'alarm') {
+    ctx.fillRect(92, 116, 136, 76);
+    ctx.fillRect(112, 86, 96, 38);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(128, 132, 64, 22);
+    ctx.beginPath();
+    ctx.arc(160, 205, 34, 0, Math.PI);
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 12;
+    ctx.stroke();
+  } else if (type === 'extinguisher') {
+    ctx.fillStyle = color;
+    ctx.roundRect(112, 104, 78, 122, 18);
+    ctx.fill();
+    ctx.fillStyle = '#111827';
+    ctx.fillRect(104, 88, 94, 22);
+    ctx.fillRect(178, 78, 48, 18);
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 10;
+    ctx.beginPath();
+    ctx.arc(160, 114, 48, Math.PI, Math.PI * 1.7);
+    ctx.stroke();
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 28px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText(label === 'CO₂' ? 'CO2' : label, 151, 174);
+  } else {
+    ctx.fillStyle = color;
+    ctx.fillRect(98, 78, 124, 150);
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(116, 98, 88, 130);
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.moveTo(160, 122);
+    ctx.lineTo(194, 160);
+    ctx.lineTo(174, 160);
+    ctx.lineTo(174, 196);
+    ctx.lineTo(146, 196);
+    ctx.lineTo(146, 160);
+    ctx.lineTo(126, 160);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 30px Arial';
+  ctx.textAlign = 'center';
+  ctx.fillText(label, 160, 278);
+  const texture = new THREE.CanvasTexture(canvas);
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false }));
+  sprite.scale.set(0.28, 0.28, 1);
+  sprite.renderOrder = 10;
+  return sprite;
+}
+
 function buildExtinguisher({ label, color, correct, position }) {
   const group = new THREE.Group();
   const body = new THREE.Mesh(
@@ -388,11 +467,9 @@ function buildExtinguisher({ label, color, correct, position }) {
   handle.position.set(-0.02, -0.12, 0);
   group.add(handle);
 
-  const labelSprite = buildTextLabel(label, correct ? '#dcfce7' : '#fee2e2');
-  labelSprite.position.set(0, 0.18, 0.06);
-  group.add(labelSprite);
-
   group.position.copy(position);
+  group.add(buildObjectBadge('extinguisher', label, correct ? '#22c55e' : color));
+  group.children[group.children.length - 1].position.set(0, 0.36, 0.04);
   group.userData = { type: 'extinguisher', label, correct };
   return group;
 }
@@ -435,7 +512,32 @@ function buildAlarm(position) {
   group.add(beacon);
 
   group.position.copy(position);
+  group.add(buildObjectBadge('alarm', 'ALARM', '#ef4444'));
+  group.children[group.children.length - 1].position.set(0, 0.38, 0.04);
   group.userData = { type: 'alarm' };
+  return group;
+}
+
+function buildExit(position) {
+  const group = new THREE.Group();
+  const frame = new THREE.Mesh(
+    new THREE.BoxGeometry(0.2, 0.3, 0.05),
+    new THREE.MeshStandardMaterial({ color: 0x22c55e, emissive: 0x064e3b, emissiveIntensity: 0.45, roughness: 0.4 })
+  );
+  group.add(frame);
+
+  const arrow = new THREE.Mesh(
+    new THREE.ConeGeometry(0.045, 0.12, 3),
+    new THREE.MeshBasicMaterial({ color: 0xffffff })
+  );
+  arrow.rotation.z = -Math.PI / 2;
+  arrow.position.set(0, 0.02, 0.04);
+  group.add(arrow);
+
+  group.position.copy(position);
+  group.add(buildObjectBadge('exit', 'EXIT', '#22c55e'));
+  group.children[group.children.length - 1].position.set(0, 0.42, 0.04);
+  group.userData = { type: 'exit' };
   return group;
 }
 
@@ -456,6 +558,7 @@ function buildScenarioDrill(anchorPosition) {
   state.drillState = 'FIRE_STARTING';
   state.effectiveSprayDuration = 0;
   state.extinguished = false;
+  state.assessmentEngine.start();
 
   const world = new THREE.Group();
   world.position.copy(anchorPosition);
@@ -489,21 +592,47 @@ function buildScenarioDrill(anchorPosition) {
     getFirePosition: () => fire.group.getWorldPosition(new THREE.Vector3())
   };
 
-  const alarm = buildAlarm(new THREE.Vector3(-0.28, 0.22, 0.14));
+  const alarm = buildAlarm(new THREE.Vector3(-0.5, 0.24, 0.14));
   world.add(alarm);
   state.drillInteractiveObjects.push(alarm);
 
-  const co2 = buildExtinguisher({ label: 'CO₂', color: 0xf87171, correct: true, position: new THREE.Vector3(-0.4, 0.12, -0.18) });
-  const water = buildExtinguisher({ label: 'WATER', color: 0x60a5fa, correct: false, position: new THREE.Vector3(-0.12, 0.12, -0.18) });
-  const foam = buildExtinguisher({ label: 'FOAM', color: 0x22c55e, correct: false, position: new THREE.Vector3(0.18, 0.12, -0.18) });
-  const bucket = buildBucket(new THREE.Vector3(0.42, 0.12, -0.12));
-  [co2, water, foam, bucket].forEach((item) => world.add(item));
-  state.drillInteractiveObjects.push(co2, water, foam, bucket);
+  const co2 = buildExtinguisher({ label: 'CO₂', color: 0xf87171, correct: true, position: new THREE.Vector3(-0.42, 0.12, -0.3) });
+  const water = buildExtinguisher({ label: 'WATER', color: 0x60a5fa, correct: false, position: new THREE.Vector3(-0.08, 0.12, -0.3) });
+  const foam = buildExtinguisher({ label: 'FOAM', color: 0x22c55e, correct: false, position: new THREE.Vector3(0.26, 0.12, -0.3) });
+  const bucket = buildBucket(new THREE.Vector3(0.58, 0.12, -0.22));
+  const exit = buildExit(new THREE.Vector3(0.62, 0.38, 0.08));
+  [co2, water, foam, bucket, exit].forEach((item) => world.add(item));
+  state.drillInteractiveObjects.push(co2, water, foam, bucket, exit);
 
   state.activeExtinguisher = co2;
-  setObjective('Activate the emergency alarm.');
+  setObjective('Tap the red alarm, then choose the CO₂ extinguisher.');
   state.drillState = 'ALARM_REQUIRED';
   showToast('AR drill started');
+}
+
+function showFirePreview() {
+  if (!state.scene || state.previewFire) return;
+
+  setScanHudVisible(true);
+  const previewPosition = new THREE.Vector3(
+    (Math.random() - 0.5) * 0.9,
+    0.12 + Math.random() * 0.32,
+    -1.1 - Math.random() * 1.1
+  );
+  state.previewFire = new window.Fire({
+    scene: state.scene,
+    position: new THREE.Vector3(),
+    config: { fireSize: 0.28, fireIntensity: 1.45, smokeAmount: 18, animationSpeed: 1.2 }
+  });
+  state.previewFire.group.position.copy(previewPosition);
+  setObjective('Scan the area around you to find a safe training position.');
+  showToast('Virtual fire detected nearby');
+}
+
+function removeFirePreview() {
+  if (!state.previewFire) return;
+  state.previewFire.destroy();
+  state.previewFire = null;
 }
 
 function getWorldTouchPoint(event, canvas, camera) {
@@ -534,7 +663,7 @@ function preparePlacementReticle() {
 function setupPlacementButton() {
   if (state.placementButton) return;
   const button = document.createElement('button');
-  button.textContent = 'Confirm Placement';
+  button.textContent = 'Start Training Here';
   Object.assign(button.style, {
     position: 'fixed',
     left: '50%',
@@ -551,6 +680,8 @@ function setupPlacementButton() {
   button.addEventListener('click', () => {
     if (!state.placementReticle || !state.placementReticle.visible) return;
     const anchorPos = state.placementReticle.position.clone();
+    removeFirePreview();
+    setScanHudVisible(false);
     state.isPlacementConfirmed = true;
     state.cameraFallbackMode = !state.arSession;
     if (state.arSession) {
@@ -563,7 +694,7 @@ function setupPlacementButton() {
       state.placementButton.remove();
       state.placementButton = null;
     }
-    showToast('Training area placed');
+    showToast('Fire location confirmed. Starting drill.');
     setScreen('ar-scan');
   });
   document.body.appendChild(button);
@@ -595,6 +726,7 @@ async function initARScene() {
   const canvas = document.getElementById('arCanvas');
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(window.innerWidth, window.innerHeight, false);
   renderer.setClearColor(0x000000, 0);
 
   const scene = new THREE.Scene();
@@ -608,6 +740,15 @@ async function initARScene() {
   state.renderer = renderer;
   state.scene = scene;
   state.camera = camera;
+
+  const resizeRenderer = () => {
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+    camera.aspect = width / height;
+    camera.updateProjectionMatrix();
+    renderer.setSize(width, height, false);
+  };
+  window.addEventListener('resize', resizeRenderer);
 
   const reticle = preparePlacementReticle();
   setupPlacementButton();
@@ -647,12 +788,16 @@ async function initARScene() {
             state.fireScenario.fire.applySpray(0.02);
             if (state.fireScenario.fire.health <= 0.02) {
               state.fireScenario.fire.isExtinguished = true;
-              state.drillState = 'ASSEMBLY_POINT_REACHED';
-              setObjective('Reach the assembly point using the safe route.');
+              state.drillState = 'EVACUATION_REQUIRED';
+              state.assessmentEngine.recordEffectiveSprayTime(state.effectiveSprayDuration);
+              state.assessmentEngine.recordExtinguishingSuccess(true);
+              setObjective('Fire out. Tap the green EXIT marker to finish the drill.');
               showToast('Fire extinguished');
             }
           }
         }
+      } else if (state.previewFire) {
+        state.previewFire.update(performance.now() / 1000);
       }
 
       if (state.arSession && state.arHitTestSource && state.arReferenceSpace) {
@@ -694,12 +839,16 @@ async function initARScene() {
     if (hitTarget.userData.type === 'alarm') {
       state.isAlarmActive = true;
       state.drillState = 'ALARM_ACTIVATED';
-      setObjective('Select a safe extinguisher.');
+      setObjective('Tap the CO₂ extinguisher. Avoid water and foam.');
       showToast('Alarm activated');
       return;
     }
 
     if (hitTarget.userData.type === 'extinguisher') {
+      if (!state.isAlarmActive) {
+        showToast('Activate the alarm first');
+        return;
+      }
       if (hitTarget.userData.correct) {
         state.correctExtinguisherSelected = true;
         state.isCorrectExtinguisherSelected = true;
@@ -718,6 +867,21 @@ async function initARScene() {
         toggleSprayButton(false);
         showCriticalError('Using water is unsafe for this configured electrical-fire training scenario. Follow the approved emergency procedure.');
       }
+      return;
+    }
+
+    if (hitTarget.userData.type === 'exit') {
+      if (state.drillState !== 'EVACUATION_REQUIRED') {
+        showToast('Extinguish the fire before evacuating');
+        return;
+      }
+      state.drillState = 'COMPLETED';
+      state.assessmentEngine.recordResponseTime();
+      state.assessmentEngine.recordEvacuationChoice('safe-route');
+      state.extinguished = true;
+      completeAssessment();
+      setScreen('assessment-result');
+      showToast('Emergency drill complete');
       return;
     }
 
@@ -743,8 +907,12 @@ async function initARScene() {
       fallbackVideo.style.display = 'block';
       showToast('Camera unavailable — using 3D fallback');
     }
-    buildScenarioDrill(new THREE.Vector3(0, 0, -0.8));
+    state.placementReticle.position.set(0, 0.01, -0.8);
+    state.placementReticle.visible = true;
+    state.currentPlacement = state.placementReticle.position.clone();
   }
+
+  showFirePreview();
 
   if (navigator.xr && typeof navigator.xr.isSessionSupported === 'function') {
     try {
@@ -774,16 +942,19 @@ async function initARScene() {
         });
       } else {
         state.arSupported = false;
-        showCompatibilityScreen('AR mode is not supported on this browser/device. Please use a compatible Android browser/device.');
+        state.cameraFallbackMode = true;
+        showToast('WebXR unavailable — using camera training mode');
       }
     } catch (error) {
       state.arSupported = false;
       state.arSession = null;
-      showCompatibilityScreen('AR mode is not supported on this browser/device. Please use a compatible Android browser/device.');
+      state.cameraFallbackMode = true;
+      showToast('WebXR unavailable — using camera training mode');
     }
   } else {
     state.arSupported = false;
-    showCompatibilityScreen('AR mode is not supported on this browser/device. Please use a compatible Android browser/device.');
+    state.cameraFallbackMode = true;
+    showToast('Using camera training mode');
   }
 
   renderFrame();
@@ -800,12 +971,6 @@ function showCompatibilityScreen(message = 'AR mode is not supported on this bro
 
 function startARExperience() {
   requestCameraPermission().then(() => {
-    const hasXR = !!(navigator.xr && typeof navigator.xr.isSessionSupported === 'function');
-    if (!hasXR) {
-      showCompatibilityScreen('AR mode is not supported on this browser/device. Please use a compatible Android browser/device.');
-      return;
-    }
-
     setScreen('ar-scan');
     initARScene();
   });
@@ -909,6 +1074,7 @@ function resetScenario() {
   if (state.timer) window.clearInterval(state.timer);
   state.assessmentEngine = new window.AssessmentEngine();
   if (state.fireScenario && state.fireScenario.fire) state.fireScenario.fire.destroy();
+  removeFirePreview();
   if (state.fireExtinguisher) state.fireExtinguisher.destroy();
   if (state.sprayEffect) state.sprayEffect.destroy();
   if (state.drillWorldGroup) {
