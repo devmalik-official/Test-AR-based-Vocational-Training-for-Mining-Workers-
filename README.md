@@ -38,6 +38,26 @@ Then open:
 http://localhost:8080
 ```
 
+## Deploy on Netlify
+
+This is a static web app and does not need Python in production. In Netlify, set the publish directory to the project root (`.`) and leave the build command empty. Netlify serves `index.html`, JavaScript, CSS, Three.js, and the service worker directly over HTTPS, which is required for camera access.
+
+The `netlify.toml` file contains the publish setting and prevents stale `index.html` and service-worker files from being cached during updates.
+
+The Python command above is only a local development server. If you later add Python backend logic, move it to a separate hosted API or rewrite it as a Netlify Function; Python code cannot run continuously inside the static Netlify site.
+
+## APK camera requirements
+
+If the Netlify URL is wrapped in an Android WebView, the native APK must:
+
+- Declare `android.permission.CAMERA` in `AndroidManifest.xml`.
+- Request camera permission at runtime on Android 6 or newer.
+- Grant `RESOURCE_VIDEO_CAPTURE` from the WebView permission callback.
+- Enable JavaScript, DOM storage, and media playback in the WebView.
+- Load the HTTPS Netlify URL, not an HTTP local-development URL.
+
+Basic website-to-APK converters often omit the WebView camera permission callback. In that case the app can show a black camera area even though the same URL works in Chrome. A Trusted Web Activity or a Capacitor Android wrapper with the camera permission configured is a better option. WebXR support is also browser-dependent, so the wrapper should at minimum support `getUserMedia()` for the camera fallback.
+
 ## HTTPS / camera requirements
 
 WebXR AR requires a secure context. On a desktop browser it is usually not available. On Android devices, use Chrome or a compatible browser with WebXR AR support, ideally served over `https://` or via local secure hosting. If the device is connected to the same local network, `https` can be configured with a trusted local certificate or a reverse proxy. When testing on a phone, use a local LAN URL that the phone can reach and ensure camera permissions are enabled.

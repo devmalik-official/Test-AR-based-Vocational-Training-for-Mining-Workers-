@@ -734,22 +734,30 @@ function setupPlacementButton() {
 
 async function requestCameraPermission() {
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    return { allowed: false, reason: 'Camera API unavailable.' };
+    return { allowed: false, reason: 'Camera API unavailable in this app wrapper.' };
   }
 
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
-      audio: false
-    });
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: false
+      });
+    } catch (firstError) {
+      stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+    }
     state.cameraStream = stream;
     const video = ensureCameraVideo();
     video.srcObject = stream;
-    video.play().catch(() => {});
+    await video.play();
     return { allowed: true, reason: '' };
   } catch (error) {
     state.cameraStream = null;
-    return { allowed: false, reason: 'Camera permission unavailable.' };
+    const reason = error?.name === 'NotAllowedError'
+      ? 'Camera permission was denied. Enable Camera permission for this APK.'
+      : `Camera could not start: ${error?.name || 'unknown error'}.`;
+    return { allowed: false, reason };
   }
 }
 
@@ -1004,7 +1012,8 @@ function showCompatibilityScreen(message = 'AR mode is not supported on this bro
 }
 
 function startARExperience() {
-  requestCameraPermission().then(() => {
+  requestCameraPermission().then((result) => {
+    if (!result.allowed) showToast(result.reason);
     setScreen('ar-scan');
     initARScene();
   });
