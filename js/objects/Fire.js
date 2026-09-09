@@ -17,6 +17,7 @@ class Fire {
     this.flameMeshes = [];
     this.smokeMeshes = [];
     this.light = null;
+    this.sparks = [];
     this.create();
   }
 
@@ -68,6 +69,18 @@ class Fire {
       this.smokeMeshes.push(smoke);
     }
 
+    for (let i = 0; i < 12; i += 1) {
+      const spark = new THREE.Mesh(
+        new THREE.SphereGeometry(0.012, 6, 6),
+        new THREE.MeshBasicMaterial({ color: 0xffd166, transparent: true, opacity: 0.85 })
+      );
+      spark.position.set((Math.random() - 0.5) * 0.18, 0.06 + Math.random() * 0.2, (Math.random() - 0.5) * 0.18);
+      spark.userData.speed = 0.8 + Math.random() * 0.9;
+      spark.userData.offset = Math.random() * Math.PI * 2;
+      this.group.add(spark);
+      this.sparks.push(spark);
+    }
+
     this.scene.add(this.group);
   }
 
@@ -97,6 +110,13 @@ class Fire {
       smoke.position.x += Math.sin(time * 1.4 + smoke.userData.offset) * 0.0008;
       smoke.position.z += Math.cos(time * 1.6 + smoke.userData.offset) * 0.0008;
       smoke.material.opacity = 0.08 + (1 - this.health) * 0.2 + (index % 2) * 0.04;
+    });
+
+    this.sparks.forEach((spark) => {
+      spark.position.y += Math.sin(time * spark.userData.speed + spark.userData.offset) * 0.003;
+      spark.position.x += Math.cos(time * (spark.userData.speed + 1) + spark.userData.offset) * 0.004;
+      spark.position.z += Math.sin(time * (spark.userData.speed + 0.5) + spark.userData.offset) * 0.004;
+      spark.material.opacity = 0.3 + (1 - this.health) * 0.6;
     });
 
     if (sprayActive && this.health > 0) {
