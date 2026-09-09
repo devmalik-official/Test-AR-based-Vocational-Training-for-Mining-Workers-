@@ -277,7 +277,8 @@ function handleAction(action) {
 
 async function requestCameraPermission() {
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    return { allowed: false, reason: 'Camera API is unavailable on this browser, but AR will still be attempted on supported devices.' };
+    state.cameraStream = null;
+    return { allowed: true, reason: 'Camera API unavailable; continuing in browser fallback mode.' };
   }
 
   try {
@@ -293,37 +294,44 @@ async function requestCameraPermission() {
     state.cameraStream = stream;
     return { allowed: true, reason: '' };
   } catch (error) {
-    return { allowed: false, reason: 'Camera permission was denied. Please allow camera access to start the AR safety simulation.' };
+    state.cameraStream = null;
+    return { allowed: true, reason: 'Camera permission unavailable; continuing in browser fallback mode.' };
   }
 }
 
 async function startARExperience() {
+  const cameraPermission = await requestCameraPermission();
   const xr = navigator.xr;
+
   if (!xr || typeof xr.requestSession !== 'function') {
-    showCompatibilityScreen('AR mode is not supported on this browser/device. Please use a compatible Android browser/device with WebXR AR support.');
+    setScreen('ar-scan');
+    await initARScene();
     return;
   }
 
   try {
     const supported = await xr.isSessionSupported?.('immersive-ar');
     if (supported === false) {
-      showCompatibilityScreen('AR mode is not supported on this browser/device. Please use a compatible Android browser/device with WebXR AR support.');
+      setScreen('ar-scan');
+      await initARScene();
       return;
     }
 
     setScreen('ar-scan');
     await initARScene();
   } catch (error) {
-    showCompatibilityScreen('AR mode is not supported on this browser/device. Please use a compatible Android browser/device with WebXR AR support.');
+    setScreen('ar-scan');
+    await initARScene();
   }
 }
 
 async function initARScene() {
   const canvas = document.getElementById('arCanvas');
+  const supportsXR = !!navigator.xr && typeof navigator.xr.requestSession === 'function';
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.xr.enabled = true;
+  renderer.xr.enabled = supportsXR;
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.01, 100);
@@ -412,10 +420,8 @@ async function initARScene() {
       renderer.xr.setSession(session, referenceSpace);
       session.addEventListener('inputsourceschange', () => {});
     } catch (error) {
-      showCompatibilityScreen('AR mode is not supported on this browser/device. Please use a compatible Android browser/device with WebXR AR support.');
+      // Ignore XR failure and continue in fallback browser mode.
     }
-  } else {
-    showCompatibilityScreen('AR mode is not supported on this browser/device. Please use a compatible Android browser/device with WebXR AR support.');
   }
 
   function animatePlacementFrame() {
