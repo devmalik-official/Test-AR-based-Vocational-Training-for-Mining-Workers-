@@ -1,8 +1,10 @@
-const CACHE_NAME = 'sih-fire-safety-v16';
+const CACHE_NAME = 'sih-fire-safety-v26';
 const APP_SHELL = [
   './',
   './index.html',
   './manifest.json',
+  './assets/fire-extinguisher.jpg',
+  './assets/fire-alarm.jpg',
   './css/styles.css',
   './js/app.js',
   './js/localization/translations.js',

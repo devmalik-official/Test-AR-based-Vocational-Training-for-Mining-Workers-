@@ -114,6 +114,13 @@ The local assessment engine tracks:
 
 Scores are combined into an overall percentage. A critical error can override a high score and force a failed result, which matches the safety-training requirement.
 
+## Visual asset sources
+
+The interactive extinguisher and alarm photo assets are sourced from Wikimedia Commons:
+
+- `assets/fire-extinguisher.jpg`: [Fire extinguisher 1 2](https://commons.wikimedia.org/wiki/File:Fire_extinguisher_1_2.jpg)
+- `assets/fire-alarm.jpg`: [Honeywell fire alarm with plastic shield](https://commons.wikimedia.org/wiki/File:Honeywell_fire_alarm_with_plastic_shield.JPG)
+
 ## Package into an Android APK later
 
 A later step can package this web application as a WebView-based Android app:

@@ -97,7 +97,16 @@ const remediationContent = document.getElementById('remediationContent');
 const certificateCanvas = document.getElementById('certificateCanvas');
 
 function showToast(message) {
-  toast.textContent = message;
+  const toastTranslations = {
+    'Virtual fire detected nearby': 'fireDetected',
+    'Fire location confirmed. Starting drill.': 'startTraining',
+    'Fire extinguished': 'fireExtinguished',
+    'Alarm activated': 'alarmLabel',
+    'Emergency drill complete': 'trainingComplete',
+    'ONLINE MODE': 'online',
+    'OFFLINE MODE ✓': 'offline'
+  };
+  toast.textContent = getTranslation(toastTranslations[message] || '', message);
   toast.classList.add('visible');
   window.clearTimeout(showToast.timeoutId);
   showToast.timeoutId = window.setTimeout(() => toast.classList.remove('visible'), 2200);
@@ -133,17 +142,37 @@ function initLanguageUI() {
   langButtons.forEach((button) => {
     button.classList.toggle('active', button.dataset.lang === state.language);
   });
+  applyTranslations();
+}
+
+function getTranslation(key, fallback = key) {
+  return window.TRANSLATIONS?.[state.language]?.[key] || fallback;
+}
+
+function applyTranslations() {
+  document.documentElement.lang = state.language === 'hi' ? 'hi' : state.language === 'sat' ? 'sat' : 'en';
+  document.querySelectorAll('[data-i18n]').forEach((element) => {
+    const key = element.dataset.i18n;
+    const value = getTranslation(key, element.textContent);
+    element.textContent = value;
+  });
+  document.title = getTranslation('appTitle', document.title);
+  renderHazardCards();
+  renderRouteCards();
 }
 
 function renderHazardCards() {
   if (!hazardGrid) return;
   hazardGrid.innerHTML = '';
+  const labelKeys = {
+    fire: 'fire', electrical: 'electrical', flammable: 'flammable', exit: 'emergencyExit', extinguisher: 'fireExtinguisher'
+  };
   state.scenarioData.hazards.forEach((hazard) => {
     const card = document.createElement('button');
     card.type = 'button';
     card.className = 'hazard-card';
     card.dataset.hazardId = hazard.id;
-    card.innerHTML = `<span class="hazard-emoji">${hazard.icon}</span><span>${hazard.label}</span>`;
+    card.innerHTML = `<span class="hazard-emoji">${hazard.icon}</span><span>${getTranslation(labelKeys[hazard.id], hazard.label)}</span>`;
     card.addEventListener('click', () => {
       const isCorrect = hazard.correct;
       card.classList.toggle('selected', !card.classList.contains('selected'));
@@ -159,12 +188,15 @@ function renderHazardCards() {
 function renderRouteCards() {
   if (!routeGrid) return;
   routeGrid.innerHTML = '';
+  const labelKeys = {
+    'safe-route': 'safeRoute', blocked: 'blockedRoute', 'unsafe-area': 'unsafeArea', assembly: 'assemblyPoint'
+  };
   state.scenarioData.routes.forEach((route) => {
     const card = document.createElement('button');
     card.type = 'button';
     card.className = 'hazard-card';
     card.dataset.routeId = route.id;
-    card.innerHTML = `<span class="hazard-emoji">${route.icon}</span><span>${route.label}</span>`;
+    card.innerHTML = `<span class="hazard-emoji">${route.icon}</span><span>${getTranslation(labelKeys[route.id], route.label)}</span>`;
     card.addEventListener('click', () => {
       state.selectedRoute = route.id;
       document.querySelectorAll('.hazard-card[data-route-id]').forEach((node) => {
@@ -304,8 +336,20 @@ function removeCameraVideo() {
 function setObjective(text) {
   const label = document.getElementById('arTaskLabel');
   const textNode = document.getElementById('arTaskText');
-  if (label) label.textContent = 'OBJECTIVE';
-  if (textNode) textNode.textContent = text;
+  const objectiveTranslations = {
+    'Detecting fire in the area...': 'detectingFire',
+    'Scan the area around you to find a safe training position.': 'scanPrompt',
+    'Tap the red alarm, then choose the CO₂ extinguisher.': 'alarmObjective',
+    'Select the correct extinguisher from the four options.': 'extinguisherObjective',
+    'Aim at the fire and hold SPRAY.': 'sprayObjective',
+    'Fire out. Tap the green EXIT marker to finish the drill.': 'exitObjective'
+  };
+  if (label) label.textContent = getTranslation('objective', 'OBJECTIVE');
+  if (textNode) {
+    if (objectiveTranslations[text]) textNode.dataset.i18n = objectiveTranslations[text];
+    else delete textNode.dataset.i18n;
+    textNode.textContent = getTranslation(objectiveTranslations[text] || '', text);
+  }
 }
 
 function setScanHudVisible(visible) {
@@ -321,7 +365,7 @@ function toggleSprayButton(show) {
   if (!button) {
     button = document.createElement('button');
     button.className = 'spray-button';
-    button.textContent = 'SPRAY';
+    button.textContent = getTranslation('spray', 'SPRAY');
     button.addEventListener('pointerdown', () => {
       if (state.correctExtinguisherSelected) state.sprayPressed = true;
     });
@@ -337,7 +381,7 @@ function showCriticalError(message) {
   if (!overlay) {
     overlay = document.createElement('div');
     overlay.id = 'critical-error-overlay';
-    overlay.innerHTML = '<div class="critical-error-box"><h3>CRITICAL SAFETY ERROR</h3><p></p></div>';
+    overlay.innerHTML = `<div class="critical-error-box"><h3>${getTranslation('criticalError', 'CRITICAL SAFETY ERROR')}</h3><p></p></div>`;
     document.body.appendChild(overlay);
     state.criticalErrorOverlay = overlay;
   }
@@ -444,33 +488,72 @@ function buildObjectBadge(type, label, color) {
   return sprite;
 }
 
+function buildPhotoSprite(source, width, height) {
+  const material = new THREE.SpriteMaterial({ transparent: true, depthTest: false });
+  const sprite = new THREE.Sprite(material);
+  sprite.scale.set(width, height, 1);
+  sprite.renderOrder = 14;
+  new THREE.TextureLoader().load(source, (texture) => {
+    material.map = texture;
+    material.needsUpdate = true;
+  });
+  return sprite;
+}
+
 function buildExtinguisher({ label, color, correct, position }) {
   const group = new THREE.Group();
+  const canisterColor = 0xef3340;
   const body = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.055, 0.065, 0.28, 18),
-    new THREE.MeshStandardMaterial({ color, metalness: 0.4, roughness: 0.42, emissive: correct ? 0x0a220f : 0x2b0d0d, emissiveIntensity: correct ? 0.08 : 0.12 })
+    new THREE.BoxGeometry(0.14, 0.28, 0.12),
+    new THREE.MeshStandardMaterial({ color: canisterColor, metalness: 0.2, roughness: 0.42, emissive: 0x260608, emissiveIntensity: 0.16 })
   );
-  body.rotation.z = Math.PI / 2;
+  body.position.y = 0.02;
   group.add(body);
 
-  const nozzle = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.012, 0.016, 0.12, 12),
+  const shoulder = new THREE.Mesh(
+    new THREE.BoxGeometry(0.1, 0.05, 0.09),
+    new THREE.MeshStandardMaterial({ color: canisterColor, roughness: 0.45 })
+  );
+  shoulder.position.y = 0.185;
+  group.add(shoulder);
+
+  const neck = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.025, 0.025, 0.06, 12),
+    new THREE.MeshStandardMaterial({ color: 0x111827, metalness: 0.55, roughness: 0.3 })
+  );
+  neck.position.y = 0.235;
+  group.add(neck);
+
+  const handleTop = new THREE.Mesh(
+    new THREE.BoxGeometry(0.1, 0.025, 0.055),
     new THREE.MeshStandardMaterial({ color: 0x111827, metalness: 0.5, roughness: 0.3 })
   );
-  nozzle.rotation.z = Math.PI / 2;
-  nozzle.position.x = 0.14;
+  handleTop.position.set(0, 0.28, 0);
+  group.add(handleTop);
+
+  const nozzle = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.012, 0.016, 0.1, 12),
+    new THREE.MeshStandardMaterial({ color: 0x111827, metalness: 0.5, roughness: 0.3 })
+  );
+  nozzle.rotation.z = -Math.PI / 2;
+  nozzle.position.set(0.075, 0.25, 0);
   group.add(nozzle);
 
   const handle = new THREE.Mesh(
-    new THREE.BoxGeometry(0.04, 0.08, 0.02),
+    new THREE.BoxGeometry(0.035, 0.08, 0.025),
     new THREE.MeshStandardMaterial({ color: 0x1f2937, metalness: 0.42, roughness: 0.4 })
   );
-  handle.position.set(-0.02, -0.12, 0);
+  handle.position.set(0, 0.225, 0.035);
   group.add(handle);
 
   group.position.copy(position);
-  group.add(buildObjectBadge('extinguisher', label, correct ? '#22c55e' : color));
-  group.children[group.children.length - 1].position.set(0, 0.36, 0.04);
+  const photo = buildPhotoSprite('./assets/fire-extinguisher.jpg', 0.22, 0.28);
+  photo.position.set(0, 0.08, 0.12);
+  group.add(photo);
+  const labelSprite = buildNameLabel(label === 'WATER' ? 'H2O' : label);
+  labelSprite.position.set(0, -0.2, 0.04);
+  labelSprite.scale.set(0.34, 0.065, 1);
+  group.add(labelSprite);
   group.userData = { type: 'extinguisher', label, correct };
   return group;
 }
@@ -498,46 +581,119 @@ function buildBucket(position) {
 
 function buildAlarm(position) {
   const group = new THREE.Group();
-  const base = new THREE.Mesh(
-    new THREE.BoxGeometry(0.16, 0.12, 0.08),
-    new THREE.MeshStandardMaterial({ color: 0xf4f4f5, emissive: 0x1f2937, emissiveIntensity: 0.25 })
+  const panel = new THREE.Mesh(
+    new THREE.BoxGeometry(0.3, 0.52, 0.045),
+    new THREE.MeshBasicMaterial({ color: 0x26070b, transparent: true, opacity: 0.82 })
   );
-  base.position.y = 0.05;
+  panel.position.z = -0.03;
+  group.add(panel);
+
+  const border = new THREE.LineSegments(
+    new THREE.EdgesGeometry(new THREE.BoxGeometry(0.31, 0.53, 0.05)),
+    new THREE.LineBasicMaterial({ color: 0xff1734 })
+  );
+  border.position.z = -0.01;
+  group.add(border);
+
+  const base = new THREE.Mesh(
+    new THREE.BoxGeometry(0.22, 0.12, 0.06),
+    new THREE.MeshStandardMaterial({ color: 0xef3340, emissive: 0x610514, emissiveIntensity: 0.5, metalness: 0.2, roughness: 0.35 })
+  );
+  base.position.set(0, -0.08, 0.04);
   group.add(base);
 
   const beacon = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.04, 0.04, 0.06, 16),
-    new THREE.MeshStandardMaterial({ color: 0xf59e0b, emissive: 0xff8c1a, emissiveIntensity: 0.7 })
+    new THREE.BoxGeometry(0.11, 0.13, 0.045),
+    new THREE.MeshStandardMaterial({ color: 0xef3340, emissive: 0x8f0718, emissiveIntensity: 1.1, metalness: 0.15, roughness: 0.28 })
   );
-  beacon.position.y = 0.18;
+  beacon.position.set(0, 0.08, 0.07);
   group.add(beacon);
 
+  const cap = new THREE.Mesh(
+    new THREE.BoxGeometry(0.1, 0.04, 0.05),
+    new THREE.MeshStandardMaterial({ color: 0xff5263, emissive: 0xd90429, emissiveIntensity: 0.8 })
+  );
+  cap.position.set(0, 0.15, 0.07);
+  group.add(cap);
+
+  const button = new THREE.Mesh(
+    new THREE.BoxGeometry(0.12, 0.14, 0.035),
+    new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.35 })
+  );
+  button.position.set(0, -0.04, 0.08);
+  group.add(button);
+
+  const buttonCenter = new THREE.Mesh(
+    new THREE.CircleGeometry(0.025, 20),
+    new THREE.MeshBasicMaterial({ color: 0x111827 })
+  );
+  buttonCenter.position.set(0, -0.04, 0.102);
+  group.add(buttonCenter);
+
+  const alarmLight = new THREE.PointLight(0xff233f, 1.4, 1.3);
+  alarmLight.position.set(0, 0.22, 0.04);
+  group.add(alarmLight);
+
   group.position.copy(position);
-  group.add(buildObjectBadge('alarm', 'ALARM', '#ef4444'));
-  group.children[group.children.length - 1].position.set(0, 0.38, 0.04);
+  const photo = buildPhotoSprite('./assets/fire-alarm.jpg', 0.3, 0.25);
+  photo.position.set(0, 0.03, 0.12);
+  group.add(photo);
+  const labelSprite = buildNameLabel(getTranslation('alarmLabel', 'ALARM'));
+  labelSprite.position.set(0, -0.36, 0.04);
+  labelSprite.scale.set(0.36, 0.07, 1);
+  group.add(labelSprite);
   group.userData = { type: 'alarm' };
   return group;
+}
+
+function buildNameLabel(text) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 96;
+  const context = canvas.getContext('2d');
+  context.clearRect(0, 0, canvas.width, canvas.height);
+  context.font = 'bold 52px Arial';
+  context.textAlign = 'center';
+  context.textBaseline = 'middle';
+  context.lineWidth = 12;
+  context.strokeStyle = 'rgba(0, 0, 0, 0.9)';
+  context.strokeText(text, canvas.width / 2, canvas.height / 2);
+  context.fillStyle = '#ffffff';
+  context.fillText(text, canvas.width / 2, canvas.height / 2);
+  const texture = new THREE.CanvasTexture(canvas);
+  const label = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false }));
+  label.scale.set(0.42, 0.08, 1);
+  label.renderOrder = 12;
+  return label;
 }
 
 function buildExit(position) {
   const group = new THREE.Group();
   const frame = new THREE.Mesh(
-    new THREE.BoxGeometry(0.2, 0.3, 0.05),
-    new THREE.MeshStandardMaterial({ color: 0x22c55e, emissive: 0x064e3b, emissiveIntensity: 0.45, roughness: 0.4 })
+    new THREE.BoxGeometry(0.28, 0.38, 0.06),
+    new THREE.MeshStandardMaterial({ color: 0x15803d, emissive: 0x064e3b, emissiveIntensity: 0.45, roughness: 0.4 })
   );
   group.add(frame);
+
+  const door = new THREE.Mesh(
+    new THREE.BoxGeometry(0.2, 0.3, 0.02),
+    new THREE.MeshStandardMaterial({ color: 0x0f5132, roughness: 0.65 })
+  );
+  door.position.z = 0.04;
+  group.add(door);
 
   const arrow = new THREE.Mesh(
     new THREE.ConeGeometry(0.045, 0.12, 3),
     new THREE.MeshBasicMaterial({ color: 0xffffff })
   );
   arrow.rotation.z = -Math.PI / 2;
-  arrow.position.set(0, 0.02, 0.04);
+  arrow.position.set(0, 0.02, 0.07);
   group.add(arrow);
 
   group.position.copy(position);
-  group.add(buildObjectBadge('exit', 'EXIT', '#22c55e'));
-  group.children[group.children.length - 1].position.set(0, 0.42, 0.04);
+  const labelSprite = buildNameLabel(getTranslation('exitLabel', 'EXIT'));
+  labelSprite.position.set(0, -0.26, 0.06);
+  group.add(labelSprite);
   group.userData = { type: 'exit' };
   return group;
 }
@@ -594,6 +750,13 @@ function buildScenarioDrill(anchorPosition) {
   warning.position.set(0.1, 0.18, 0.08);
   world.add(warning);
 
+  const extinguisherRack = new THREE.Mesh(
+    new THREE.BoxGeometry(1.18, 0.42, 0.06),
+    new THREE.MeshStandardMaterial({ color: 0x263449, roughness: 0.55, metalness: 0.25 })
+  );
+  extinguisherRack.position.set(0, 0.2, -0.04);
+  world.add(extinguisherRack);
+
   const firePos = new THREE.Vector3(0.28, 0.26, 0.12);
   const fire = new window.Fire({
     scene: world,
@@ -611,10 +774,13 @@ function buildScenarioDrill(anchorPosition) {
   world.add(alarm);
   state.drillInteractiveObjects.push(alarm);
 
-  const co2 = buildExtinguisher({ label: 'CO₂', color: 0xf87171, correct: true, position: new THREE.Vector3(-0.42, 0.12, -0.3) });
+  const co2 = buildExtinguisher({ label: getTranslation('co2', 'CO₂'), color: 0xf87171, correct: true, position: new THREE.Vector3(-0.48, 0.12, -0.3) });
+  const water = buildExtinguisher({ label: getTranslation('water', 'WATER'), color: 0x60a5fa, correct: false, position: new THREE.Vector3(-0.16, 0.12, -0.3) });
+  const foam = buildExtinguisher({ label: getTranslation('foam', 'FOAM'), color: 0x22c55e, correct: false, position: new THREE.Vector3(0.16, 0.12, -0.3) });
+  const powder = buildExtinguisher({ label: getTranslation('dryPowder', 'POWDER'), color: 0xfacc15, correct: false, position: new THREE.Vector3(0.48, 0.12, -0.3) });
   const exit = buildExit(new THREE.Vector3(0.62, 0.38, 0.08));
-  [co2, exit].forEach((item) => world.add(item));
-  state.drillInteractiveObjects.push(co2, exit);
+  [co2, water, foam, powder, exit].forEach((item) => world.add(item));
+  state.drillInteractiveObjects.push(co2, water, foam, powder, exit);
 
   state.activeExtinguisher = co2;
   setObjective('Tap the red alarm, then choose the CO₂ extinguisher.');
@@ -763,13 +929,14 @@ async function requestCameraPermission() {
 
 async function initARScene() {
   const canvas = document.getElementById('arCanvas');
+  const stage = document.getElementById('ar-canvas-wrap');
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  renderer.setSize(window.innerWidth, window.innerHeight, false);
+  renderer.setSize(stage.clientWidth, stage.clientHeight, false);
   renderer.setClearColor(0x000000, 0);
 
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.01, 100);
+  const camera = new THREE.PerspectiveCamera(60, stage.clientWidth / stage.clientHeight, 0.01, 100);
   camera.position.set(0, 0.8, 1.8);
   camera.lookAt(0, 0, -0.6);
 
@@ -781,8 +948,9 @@ async function initARScene() {
   state.camera = camera;
 
   const resizeRenderer = () => {
-    const width = window.innerWidth;
-    const height = window.innerHeight;
+    const width = stage.clientWidth;
+    const height = stage.clientHeight;
+    if (!width || !height) return;
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
     renderer.setSize(width, height, false);
@@ -879,7 +1047,7 @@ async function initARScene() {
     if (hitTarget.userData.type === 'alarm') {
       state.isAlarmActive = true;
       state.drillState = 'ALARM_ACTIVATED';
-      setObjective('Tap the CO₂ extinguisher. Avoid water and foam.');
+      setObjective('Select the correct extinguisher from the four options.');
       updateDrillVisibility();
       showToast('Alarm activated');
       return;
